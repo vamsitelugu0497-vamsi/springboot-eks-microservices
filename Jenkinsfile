@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'ec2-fleet' }
+    agent any
 
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
