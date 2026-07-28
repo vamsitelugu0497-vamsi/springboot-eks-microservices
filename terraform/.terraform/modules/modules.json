@@ -1,0 +1,1 @@
+{"Modules":[{"Key":"","Source":"","Dir":"."},{"Key":"ecr","Source":"./ecr","Dir":"ecr"},{"Key":"eks","Source":"./eks","Dir":"eks"},{"Key":"iam","Source":"./iam","Dir":"iam"},{"Key":"rds","Source":"./rds","Dir":"rds"},{"Key":"vpc","Source":"./vpc","Dir":"vpc"}]}

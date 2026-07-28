@@ -1,0 +1,60 @@
+global:
+  namespace: microservices
+  imageRegistry: "<ECR_REPO_URI>"
+  imagePullPolicy: Always
+
+ingress:
+  enabled: true
+  className: alb
+  host: api.example.com
+  certificateArn: "<ACM_CERT_ARN>"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+podDisruptionBudget:
+  minAvailable: 1
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+services:
+  user-service:
+    image:
+      tag: "latest"
+    env: {}
+    port: 8081
+    replicas: 2
+    path: /api/v1/users
+  product-service:
+    image:
+      tag: "latest"
+    env: {}
+    port: 8082
+    replicas: 2
+    path: /api/v1/products
+  order-service:
+    image:
+      tag: "latest"
+    env:
+      USER_SERVICE_URL: "http://user-service"
+      PRODUCT_SERVICE_URL: "http://product-service"
+    port: 8083
+    replicas: 2
+    path: /api/v1/orders
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+networkPolicy:
+  enabled: true

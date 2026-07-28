@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-service-config
+  namespace: microservices
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  DB_HOST: "orderdb.microservices.svc.cluster.local"
+  DB_PORT: "5432"
+  USER_SERVICE_URL: "http://user-service"
+  PRODUCT_SERVICE_URL: "http://product-service"

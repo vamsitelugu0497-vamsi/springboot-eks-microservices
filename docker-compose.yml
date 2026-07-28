@@ -1,0 +1,171 @@
+version: "3.9"
+
+x-spring-common: &spring-common
+  environment:
+    SPRING_PROFILES_ACTIVE: docker
+  networks:
+    - microservices-net
+  restart: unless-stopped
+
+services:
+  # ---------- Databases ----------
+  userdb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - userdb-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  productdb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: productdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - productdb-data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  orderdb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: orderdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - orderdb-data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Microservices ----------
+  user-service:
+    <<: *spring-common
+    build:
+      context: ./services/user-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: userdb
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8081:8081"
+    depends_on:
+      userdb:
+        condition: service_healthy
+
+  product-service:
+    <<: *spring-common
+    build:
+      context: ./services/product-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: productdb
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    ports:
+      - "8082:8082"
+    depends_on:
+      productdb:
+        condition: service_healthy
+
+  order-service:
+    <<: *spring-common
+    build:
+      context: ./services/order-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: orderdb
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      USER_SERVICE_URL: http://user-service:8081
+      PRODUCT_SERVICE_URL: http://product-service:8082
+    ports:
+      - "8083:8083"
+    depends_on:
+      orderdb:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+
+  # ---------- Observability ----------
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    networks:
+      - microservices-net
+    depends_on:
+      - user-service
+      - product-service
+      - order-service
+
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    networks:
+      - microservices-net
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - microservices-net
+    depends_on:
+      - prometheus
+
+networks:
+  microservices-net:
+    driver: bridge
+
+volumes:
+  userdb-data:
+  productdb-data:
+  orderdb-data:

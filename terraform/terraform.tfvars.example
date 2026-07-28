@@ -1,0 +1,11 @@
+aws_region                  = "us-east-1"
+environment                 = "prod"
+cluster_name                = "springboot-eks-cluster"
+vpc_cidr                    = "10.0.0.0/16"
+kms_key_arn                 = "arn:aws:kms:us-east-1:123456789012:key/REPLACE_ME"
+node_instance_types         = ["m6i.large"]
+node_desired_size           = 3
+node_min_size                = 2
+node_max_size                = 6
+ci_cd_trusted_principal_arn = "arn:aws:iam::123456789012:role/jenkins-instance-role"
+rds_monitoring_role_arn     = "arn:aws:iam::123456789012:role/rds-monitoring-role"

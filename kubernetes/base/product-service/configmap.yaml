@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-service-config
+  namespace: microservices
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  DB_HOST: "productdb.microservices.svc.cluster.local"
+  DB_PORT: "5432"

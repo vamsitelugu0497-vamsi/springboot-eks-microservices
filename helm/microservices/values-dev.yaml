@@ -1,0 +1,10 @@
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 3
+services:
+  user-service:
+    replicas: 1
+  product-service:
+    replicas: 1
+  order-service:
+    replicas: 1

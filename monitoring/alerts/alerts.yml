@@ -1,0 +1,73 @@
+groups:
+  - name: microservices-alerts
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"user-service|product-service|order-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 2 minutes."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (application)
+          /
+          sum(rate(http_server_requests_seconds_count[5m])) by (application)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.application }}"
+          description: "Error rate has exceeded 5% for the last 5 minutes."
+
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, application)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency high on {{ $labels.application }}"
+          description: "P99 request latency has exceeded 1s for 5 minutes."
+
+      - alert: PodCrashLooping
+        expr: increase(kube_pod_container_status_restarts_total{namespace="microservices"}[15m]) > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "{{ $labels.pod }} in {{ $labels.namespace }} restarted more than 3 times in 15 minutes."
+
+      - alert: HighMemoryUsage
+        expr: |
+          sum(container_memory_working_set_bytes{namespace="microservices"}) by (pod)
+          / sum(kube_pod_container_resource_limits{namespace="microservices", resource="memory"}) by (pod)
+          > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} near memory limit"
+          description: "Memory usage above 90% of limit for 10 minutes."
+
+      - alert: HPAMaxedOut
+        expr: kube_horizontalpodautoscaler_status_current_replicas == kube_horizontalpodautoscaler_spec_max_replicas
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HPA {{ $labels.horizontalpodautoscaler }} at max replicas"
+          description: "Autoscaler has been at max replicas for 15 minutes; consider raising the ceiling."
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: hikaricp_connections_active / hikaricp_connections_max > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Connection pool near exhaustion on {{ $labels.application }}"
+          description: "HikariCP active connections above 90% of max for 5 minutes."
