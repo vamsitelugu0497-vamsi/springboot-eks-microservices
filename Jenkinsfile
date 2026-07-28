@@ -1,22 +1,20 @@
 pipeline {
     agent any
 
-    tools {
-        jdk 'JDK21'
-        maven 'Maven'
-    }
-
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
         booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip unit tests')
     }
 
     environment {
-        AWS_REGION   = 'us-east-1'
+        JAVA_HOME = "/usr/lib/jvm/java-21-amazon-corretto.x86_64"
+        PATH = "${JAVA_HOME}/bin:/usr/local/bin:/usr/bin:/bin"
+
+        AWS_REGION   = "us-east-1"
         ECR_REGISTRY = "${env.ECR_REGISTRY_URI}"
-        EKS_CLUSTER  = 'springboot-eks-cluster'
-        NAMESPACE    = 'microservices'
-        SERVICES     = 'user-service,product-service,order-service'
+        EKS_CLUSTER  = "springboot-eks-cluster"
+        NAMESPACE    = "microservices"
+        SERVICES     = "user-service,product-service,order-service"
         IMAGE_TAG    = "${BUILD_NUMBER}"
     }
 
@@ -35,17 +33,45 @@ pipeline {
             }
         }
 
+        stage('Verify Environment') {
+            steps {
+                sh '''
+                    echo "===== JAVA ====="
+                    echo "JAVA_HOME=$JAVA_HOME"
+                    echo "PATH=$PATH"
+
+                    which java
+                    java -version
+
+                    which javac
+                    javac -version
+
+                    which mvn
+                    mvn -version
+                '''
+            }
+        }
+
         stage('Build & Test') {
             when {
                 expression { !params.SKIP_TESTS }
             }
+
             steps {
                 script {
+
                     env.SERVICES.split(',').each { svc ->
+
                         echo "Building ${svc}"
 
                         dir("services/${svc}") {
-                            sh 'mvn clean verify'
+
+                            sh '''
+                                export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto.x86_64
+                                export PATH=$JAVA_HOME/bin:$PATH
+
+                                mvn clean verify
+                            '''
 
                             junit allowEmptyResults: true,
                                   testResults: '**/target/surefire-reports/*.xml'
@@ -57,20 +83,24 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
+
                 withSonarQubeEnv('sonarqube-server') {
 
                     script {
+
                         env.SERVICES.split(',').each { svc ->
 
                             dir("services/${svc}") {
 
-                                sh 'mvn sonar:sonar'
+                                sh '''
+                                    export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto.x86_64
+                                    export PATH=$JAVA_HOME/bin:$PATH
 
+                                    mvn sonar:sonar
+                                '''
                             }
-
                         }
                     }
-
                 }
             }
         }
@@ -83,13 +113,13 @@ pipeline {
             }
         }
 
-        stage('Docker Build') {
+        stage('Docker Build & Push') {
             steps {
 
-                sh """
-                aws ecr get-login-password --region ${AWS_REGION} \
-                | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                """
+                sh '''
+                aws ecr get-login-password --region ${AWS_REGION} | \
+                docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                '''
 
                 script {
 
@@ -98,16 +128,12 @@ pipeline {
                         dir("services/${svc}") {
 
                             sh """
-                            docker build -t ${ECR_REGISTRY}/${svc}:${IMAGE_TAG} .
-                            docker push ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
+                                docker build -t ${ECR_REGISTRY}/${svc}:${IMAGE_TAG} .
+                                docker push ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
                             """
-
                         }
-
                     }
-
                 }
-
             }
         }
 
@@ -119,41 +145,36 @@ pipeline {
                     env.SERVICES.split(',').each { svc ->
 
                         sh """
-                        trivy image \
-                        --severity HIGH,CRITICAL \
-                        --exit-code 1 \
-                        ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
+                            trivy image \
+                            --severity HIGH,CRITICAL \
+                            --exit-code 1 \
+                            ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
                         """
-
                     }
-
                 }
-
             }
         }
 
         stage('Deploy to EKS') {
             steps {
 
-                sh """
-                aws eks update-kubeconfig \
-                --region ${AWS_REGION} \
-                --name ${EKS_CLUSTER}
-                """
+                sh '''
+                    aws eks update-kubeconfig \
+                    --region ${AWS_REGION} \
+                    --name ${EKS_CLUSTER}
+                '''
 
-                sh """
-                helm upgrade --install microservices \
-                ./helm/microservices \
-                --namespace ${NAMESPACE} \
-                --create-namespace \
-                --set global.imageRegistry=${ECR_REGISTRY}
-                """
-
+                sh '''
+                    helm upgrade --install microservices \
+                    ./helm/microservices \
+                    --namespace ${NAMESPACE} \
+                    --create-namespace \
+                    --set global.imageRegistry=${ECR_REGISTRY}
+                '''
             }
         }
 
         stage('Smoke Test') {
-
             steps {
 
                 script {
@@ -163,22 +184,19 @@ pipeline {
                         sh "kubectl rollout status deployment/${svc} -n ${NAMESPACE}"
 
                     }
-
                 }
-
             }
-
         }
     }
 
     post {
 
         success {
-            echo "Pipeline completed successfully."
+            echo 'Pipeline completed successfully.'
         }
 
         failure {
-            echo "Pipeline failed."
+            echo 'Pipeline failed.'
         }
 
         always {
