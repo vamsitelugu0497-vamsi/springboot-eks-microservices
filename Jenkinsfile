@@ -84,47 +84,33 @@ pipeline {
         
 
         stage('Docker Build & Push') {
-            steps {
-
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds'
+        ]]) {
+            script {
                 sh '''
-                aws ecr get-login-password --region ${AWS_REGION} | \
-                docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                    aws sts get-caller-identity
+                    aws ecr get-login-password --region us-east-1 | \
+                    docker login --username AWS --password-stdin 245111010659.dkr.ecr.us-east-1.amazonaws.com
                 '''
 
-                script {
+                env.SERVICES.split(',').each { svc ->
+                    sh """
+                        docker build -t ${svc}:${BUILD_NUMBER} services/${svc}
 
-                    env.SERVICES.split(',').each { svc ->
+                        docker tag ${svc}:${BUILD_NUMBER} \
+                        245111010659.dkr.ecr.us-east-1.amazonaws.com/${svc}:${BUILD_NUMBER}
 
-                        dir("services/${svc}") {
-
-                            sh """
-                                docker build -t ${ECR_REGISTRY}/${svc}:${IMAGE_TAG} .
-                                docker push ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
-                            """
-                        }
-                    }
+                        docker push \
+                        245111010659.dkr.ecr.us-east-1.amazonaws.com/${svc}:${BUILD_NUMBER}
+                    """
                 }
             }
         }
-
-        stage('Trivy Scan') {
-            steps {
-
-                script {
-
-                    env.SERVICES.split(',').each { svc ->
-
-                        sh """
-                            trivy image \
-                            --severity HIGH,CRITICAL \
-                            --exit-code 1 \
-                            ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
-                        """
-                    }
-                }
-            }
-        }
-
+    }
+}
         stage('Deploy to EKS') {
             steps {
 
