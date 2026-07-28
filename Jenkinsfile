@@ -1,6 +1,9 @@
 pipeline {
     agent any
-
+    tools {
+        jdk 'jdk21'
+        maven 'maven3'
+    }
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
         booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip unit/integration tests')
