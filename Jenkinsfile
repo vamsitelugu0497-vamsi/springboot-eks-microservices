@@ -111,15 +111,20 @@ pipeline {
                     '''
 
                     script {
+                env.SERVICES.split(',').each { svc ->
 
-                        env.SERVICES.split(',').each { svc ->
+                    sh """
+                        echo "Deploying ${svc}..."
 
-                            sh """
-                            kubectl apply -f kubernetes/${svc}/deployment.yaml
+                        kubectl apply -f kubernetes/base/${svc}/configmap.yaml || true
+                        kubectl apply -f kubernetes/base/${svc}/secret.yaml || true
+                        kubectl apply -f kubernetes/base/${svc}/serviceaccount.yaml || true
+                        kubectl apply -f kubernetes/base/${svc}/deployment.yaml
+                        kubectl apply -f kubernetes/base/${svc}/service.yaml
 
-                            kubectl apply -f kubernetes/${svc}/service.yaml
-                            """
-                        }
+                        kubectl rollout status deployment/${svc} -n ${NAMESPACE} --timeout=180s
+                    """
+                }
                     }
                 }
             }
