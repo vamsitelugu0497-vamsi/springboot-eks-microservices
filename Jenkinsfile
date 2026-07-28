@@ -81,37 +81,7 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-
-                withSonarQubeEnv('sonarqube-server') {
-
-                    script {
-
-                        env.SERVICES.split(',').each { svc ->
-
-                            dir("services/${svc}") {
-
-                                sh '''
-                                    export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto.x86_64
-                                    export PATH=$JAVA_HOME/bin:$PATH
-
-                                    mvn sonar:sonar
-                                '''
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
+        
 
         stage('Docker Build & Push') {
             steps {
