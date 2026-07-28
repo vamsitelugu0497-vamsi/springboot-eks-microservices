@@ -1,5 +1,3 @@
-@Library('shared-pipeline-lib') _
-
 pipeline {
     agent { label 'ec2-fleet' }
 
