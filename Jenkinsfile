@@ -1,8 +1,8 @@
 pipeline {
     agent any
     tools {
-        jdk 'jdk21'
-        maven 'maven3'
+        jdk 'JDK21'
+        maven 'Maven'
     }
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
