@@ -11,7 +11,7 @@ pipeline {
         PATH = "${JAVA_HOME}/bin:/usr/local/bin:/usr/bin:/bin"
 
         AWS_REGION   = "us-east-1"
-        ECR_REGISTRY = "${env.ECR_REGISTRY_URI}"
+        ECR_REGISTRY = "245111010659.dkr.ecr.us-east-1.amazonaws.com"
         EKS_CLUSTER  = "springboot-eks-cluster"
         NAMESPACE    = "microservices"
         SERVICES     = "user-service,product-service,order-service"
