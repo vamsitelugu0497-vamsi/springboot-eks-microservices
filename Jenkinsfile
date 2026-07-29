@@ -1,156 +1,46 @@
-pipeline {
-    agent any
+stage('Deploy to EKS') {
 
-    environment {
-        JAVA_HOME = "/usr/lib/jvm/java-21-amazon-corretto.x86_64"
-        PATH = "${JAVA_HOME}/bin:/usr/local/bin:/usr/bin:/bin"
+    steps {
 
-        AWS_REGION   = "us-east-1"
-        ECR_REGISTRY = "245111010659.dkr.ecr.us-east-1.amazonaws.com"
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds'
+        ]]) {
 
-        EKS_CLUSTER  = "devops-eks"
-        NAMESPACE    = "microservices"
+            sh '''
+            aws sts get-caller-identity
 
-        SERVICES = "user-service,product-service,order-service"
-        IMAGE_TAG = "${BUILD_NUMBER}"
-    }
+            aws eks update-kubeconfig \
+                --region ${AWS_REGION} \
+                --name ${EKS_CLUSTER}
 
-    stages {
+            kubectl get nodes
+            '''
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
+            script {
 
-        stage('Verify Environment') {
-            steps {
-                sh '''
-                java -version
-                javac -version
-                mvn -version
-                docker --version
-                aws --version
-                '''
-            }
-        }
-
-        stage('Build & Test') {
-            steps {
-                script {
-                    env.SERVICES.split(',').each { svc ->
-                        dir("services/${svc}") {
-                            sh '''
-                            export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto.x86_64
-                            export PATH=$JAVA_HOME/bin:$PATH
-                            mvn clean verify
-                            '''
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Docker Build & Push') {
-            steps {
-
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-
-                    sh '''
-                    aws sts get-caller-identity
-
-                    aws ecr get-login-password \
-                    --region ${AWS_REGION} | \
-                    docker login \
-                    --username AWS \
-                    --password-stdin ${ECR_REGISTRY}
-                    '''
-
-                    script {
-
-                        env.SERVICES.split(',').each { svc ->
-
-                            sh """
-                            docker build \
-                              -t ${svc}:${IMAGE_TAG} \
-                              services/${svc}
-
-                            docker tag \
-                              ${svc}:${IMAGE_TAG} \
-                              ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
-
-                            docker push \
-                              ${ECR_REGISTRY}/${svc}:${IMAGE_TAG}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to EKS') {
-
-            steps {
-
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-
-                    sh '''
-                    aws sts get-caller-identity
-
-                    aws eks update-kubeconfig \
-                        --region ${AWS_REGION} \
-                        --name ${EKS_CLUSTER}
-
-                    kubectl get nodes
-                    '''
-
-                    script {
                 env.SERVICES.split(',').each { svc ->
 
                     sh """
-                        echo "Deploying ${svc}..."
+                    echo "Deploying ${svc}..."
 
-                        kubectl apply -f kubernetes/base/${svc}/configmap.yaml || true
-                        kubectl apply -f kubernetes/base/${svc}/secret.yaml || true
-                        kubectl apply -f kubernetes/base/${svc}/serviceaccount.yaml || true
-                        kubectl apply -f kubernetes/base/${svc}/deployment.yaml
-                        kubectl apply -f kubernetes/base/${svc}/service.yaml
+                    cp kubernetes/base/${svc}/deployment.yaml /tmp/${svc}-deployment.yaml
 
-                        kubectl rollout status deployment/${svc} -n ${NAMESPACE} --timeout=180s
+                    sed -i "s|<ECR_REPO_URI>|${ECR_REGISTRY}|g" /tmp/${svc}-deployment.yaml
+                    sed -i "s|<IMAGE_TAG>|${IMAGE_TAG}|g" /tmp/${svc}-deployment.yaml
+
+                    kubectl apply -f kubernetes/base/${svc}/configmap.yaml
+                    kubectl apply -f kubernetes/base/${svc}/secret.yaml
+                    kubectl apply -f kubernetes/base/${svc}/serviceaccount.yaml
+                    kubectl apply -f /tmp/${svc}-deployment.yaml
+                    kubectl apply -f kubernetes/base/${svc}/service.yaml
+
+                    kubectl rollout status deployment/${svc} \
+                        -n ${NAMESPACE} \
+                        --timeout=300s
                     """
                 }
-                    }
-                }
             }
-        }
-
-        stage('Smoke Test') {
-            steps {
-                sh '''
-                kubectl get pods -n ${NAMESPACE}
-                kubectl get svc -n ${NAMESPACE}
-                '''
-            }
-        }
-    }
-
-    post {
-        always {
-            cleanWs()
-        }
-
-        success {
-            echo 'Pipeline completed successfully.'
-        }
-
-        failure {
-            echo 'Pipeline failed.'
         }
     }
 }
